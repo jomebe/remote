@@ -59,11 +59,24 @@
             margin-top: 20px;
             border: 1px solid #ddd;
             display: none;
+            position: relative;
+            cursor: default;
         }
         .status {
             text-align: center;
             margin-top: 10px;
             font-weight: bold;
+        }
+        .remote-controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        .control-toggle {
+            background-color: #34a853;
+        }
+        .control-toggle.disabled {
+            background-color: #999;
         }
     </style>
 </head>
@@ -97,6 +110,11 @@
             <button id="stopSharing" disabled>화면 공유 중지</button>
             <button id="disconnect" disabled>연결 종료</button>
             
+            <div class="remote-controls">
+                <button id="enableControl" class="control-toggle">원격 제어 활성화</button>
+                <button id="disableControl" class="control-toggle disabled" disabled>원격 제어 비활성화</button>
+            </div>
+            
             <div class="status" id="status">연결 대기 중...</div>
         </div>
         
@@ -104,6 +122,7 @@
     </div>
 
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

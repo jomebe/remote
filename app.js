@@ -1,190 +1,237 @@
 document.addEventListener('DOMContentLoaded', () => {
     // DOM 요소
-    const connectionModeSelect = document.getElementById('connectionMode');
-    const connectionIdInput = document.getElementById('connectionId');
-    const copyIdButton = document.getElementById('copyId');
-    const remoteIdInput = document.getElementById('remoteId');
-    const connectButton = document.getElementById('connect');
-    const startSharingButton = document.getElementById('startSharing');
-    const stopSharingButton = document.getElementById('stopSharing');
-    const disconnectButton = document.getElementById('disconnect');
-    const statusDiv = document.getElementById('status');
+    const connectionMode = document.getElementById('connectionMode');
+    const connectionId = document.getElementById('connectionId');
+    const copyIdBtn = document.getElementById('copyId');
+    const remoteId = document.getElementById('remoteId');
+    const connectBtn = document.getElementById('connect');
+    const startSharingBtn = document.getElementById('startSharing');
+    const stopSharingBtn = document.getElementById('stopSharing');
+    const disconnectBtn = document.getElementById('disconnect');
+    const statusDisplay = document.getElementById('status');
     const remoteScreen = document.getElementById('remoteScreen');
+    const enableControlBtn = document.getElementById('enableControl');
+    const disableControlBtn = document.getElementById('disableControl');
 
-    // 변수
+    // PeerJS 객체
     let peer = null;
     let connection = null;
-    let localStream = null;
+    let stream = null;
     let call = null;
-    let isHost = true;
+    let remoteControlEnabled = false;
 
     // 초기화
     function initialize() {
-        // 랜덤 ID 생성
-        const peerId = generateRandomId();
-        
-        // PeerJS 초기화
-        peer = new Peer(peerId, {
+        peer = new Peer(null, {
             debug: 2
         });
 
         peer.on('open', (id) => {
-            connectionIdInput.value = id;
-            statusDiv.textContent = '연결 준비 완료. ID를 공유하세요.';
+            connectionId.value = id;
+            statusDisplay.textContent = '연결 ID가 생성되었습니다. 상대방에게 공유하세요.';
+        });
+
+        peer.on('connection', (conn) => {
+            connection = conn;
+            setupConnectionHandlers();
+            statusDisplay.textContent = '상대방이 연결되었습니다.';
+            disconnectBtn.disabled = false;
+        });
+
+        peer.on('call', (incomingCall) => {
+            call = incomingCall;
+            call.answer();
+            
+            call.on('stream', (remoteStream) => {
+                remoteScreen.srcObject = remoteStream;
+                remoteScreen.style.display = 'block';
+                statusDisplay.textContent = '원격 화면을 수신 중입니다.';
+            });
         });
 
         peer.on('error', (err) => {
             console.error('PeerJS 오류:', err);
-            statusDiv.textContent = `오류 발생: ${err.type}`;
+            statusDisplay.textContent = `오류 발생: ${err.type}`;
         });
-
-        // 연결 요청 수신 처리
-        peer.on('connection', (conn) => {
-            connection = conn;
-            setupConnectionHandlers();
-            statusDiv.textContent = '연결됨! 화면 공유를 시작할 수 있습니다.';
-            disconnectButton.disabled = false;
-        });
-
-        // 미디어 스트림 수신 처리
-        peer.on('call', (incomingCall) => {
-            call = incomingCall;
-            call.answer(); // 응답 (로컬 스트림 없이)
-            
-            call.on('stream', (stream) => {
-                remoteScreen.srcObject = stream;
-                remoteScreen.style.display = 'block';
-                statusDiv.textContent = '원격 화면을 수신 중입니다.';
-            });
-        });
-
-        // 모드에 따른 UI 조정
-        updateUIForMode();
     }
-
-    // 연결 모드 변경 시 UI 업데이트
-    connectionModeSelect.addEventListener('change', () => {
-        isHost = connectionModeSelect.value === 'host';
-        updateUIForMode();
-    });
-
-    // 모드에 따른 UI 조정
-    function updateUIForMode() {
-        if (isHost) {
-            startSharingButton.style.display = 'block';
-            remoteIdInput.parentElement.style.display = 'none';
-            connectButton.style.display = 'none';
-        } else {
-            startSharingButton.style.display = 'none';
-            remoteIdInput.parentElement.style.display = 'block';
-            connectButton.style.display = 'inline-block';
-        }
-    }
-
-    // 연결 ID 복사
-    copyIdButton.addEventListener('click', () => {
-        connectionIdInput.select();
-        document.execCommand('copy');
-        statusDiv.textContent = 'ID가 클립보드에 복사되었습니다!';
-        setTimeout(() => {
-            statusDiv.textContent = '연결 준비 완료. ID를 공유하세요.';
-        }, 2000);
-    });
-
-    // 연결 버튼 클릭
-    connectButton.addEventListener('click', () => {
-        const remoteId = remoteIdInput.value.trim();
-        if (!remoteId) {
-            statusDiv.textContent = '원격 ID를 입력하세요.';
-            return;
-        }
-
-        statusDiv.textContent = '연결 중...';
-        connection = peer.connect(remoteId);
-        setupConnectionHandlers();
-    });
 
     // 연결 핸들러 설정
     function setupConnectionHandlers() {
         connection.on('open', () => {
-            statusDiv.textContent = '연결됨! 원격 화면을 기다리는 중...';
-            disconnectButton.disabled = false;
+            statusDisplay.textContent = '데이터 채널이 열렸습니다.';
+            disconnectBtn.disabled = false;
         });
 
         connection.on('data', (data) => {
-            console.log('데이터 수신:', data);
-            // 원격 제어 명령 처리
-            if (data.type === 'control') {
-                handleRemoteControl(data.action);
+            if (data.type === 'mouse') {
+                handleRemoteMouseEvent(data);
+            } else if (data.type === 'keyboard') {
+                handleRemoteKeyboardEvent(data);
+            } else if (data.type === 'control') {
+                if (data.action === 'enable') {
+                    statusDisplay.textContent = '상대방이 원격 제어를 활성화했습니다.';
+                } else if (data.action === 'disable') {
+                    statusDisplay.textContent = '상대방이 원격 제어를 비활성화했습니다.';
+                }
             }
         });
 
         connection.on('close', () => {
-            statusDiv.textContent = '연결이 종료되었습니다.';
+            statusDisplay.textContent = '연결이 종료되었습니다.';
             resetConnection();
         });
 
         connection.on('error', (err) => {
             console.error('연결 오류:', err);
-            statusDiv.textContent = `연결 오류: ${err}`;
+            statusDisplay.textContent = `연결 오류: ${err}`;
             resetConnection();
         });
     }
 
-    // 화면 공유 시작
-    startSharingButton.addEventListener('click', async () => {
-        try {
-            localStream = await navigator.mediaDevices.getDisplayMedia({
-                video: true,
-                audio: false
+    // 원격 마우스 이벤트 처리
+    function handleRemoteMouseEvent(data) {
+        if (connectionMode.value === 'host') {
+            // 호스트 모드에서는 원격 마우스 이벤트를 시스템에 전달
+            const event = new MouseEvent(data.event, {
+                clientX: data.x,
+                clientY: data.y,
+                button: data.button,
+                buttons: data.buttons,
+                ctrlKey: data.ctrlKey,
+                altKey: data.altKey,
+                shiftKey: data.shiftKey,
+                metaKey: data.metaKey
             });
-
-            startSharingButton.disabled = true;
-            stopSharingButton.disabled = false;
-            statusDiv.textContent = '화면 공유 중...';
-
-            // 연결된 피어에게 스트림 전송
-            if (connection && connection.open) {
-                call = peer.call(connection.peer, localStream);
+            
+            // 시스템 레벨 이벤트 발생 (Node.js 또는 Electron 환경에서 사용)
+            if (window.electronAPI) {
+                window.electronAPI.sendMouseEvent(data);
             }
-
-            // 로컬 스트림 종료 감지
-            localStream.getVideoTracks()[0].onended = () => {
-                stopSharing();
-            };
-        } catch (err) {
-            console.error('화면 공유 오류:', err);
-            statusDiv.textContent = '화면 공유를 시작할 수 없습니다.';
         }
-    });
-
-    // 화면 공유 중지
-    stopSharingButton.addEventListener('click', stopSharing);
-
-    function stopSharing() {
-        if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
-            localStream = null;
-        }
-        
-        startSharingButton.disabled = false;
-        stopSharingButton.disabled = true;
-        statusDiv.textContent = '화면 공유가 중지되었습니다.';
     }
 
-    // 연결 종료
-    disconnectButton.addEventListener('click', () => {
-        if (connection) {
-            connection.close();
+    // 원격 키보드 이벤트 처리
+    function handleRemoteKeyboardEvent(data) {
+        if (connectionMode.value === 'host') {
+            // 호스트 모드에서는 원격 키보드 이벤트를 시스템에 전달
+            if (window.electronAPI) {
+                window.electronAPI.sendKeyboardEvent(data);
+            }
         }
-        resetConnection();
-    });
+    }
+
+    // 마우스 이벤트 전송
+    function setupRemoteControl() {
+        remoteScreen.addEventListener('mousedown', (e) => {
+            if (!remoteControlEnabled) return;
+            
+            const rect = remoteScreen.getBoundingClientRect();
+            const scaleX = remoteScreen.videoWidth / rect.width;
+            const scaleY = remoteScreen.videoHeight / rect.height;
+            
+            connection.send({
+                type: 'mouse',
+                event: 'mousedown',
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY,
+                button: e.button,
+                buttons: e.buttons,
+                ctrlKey: e.ctrlKey,
+                altKey: e.altKey,
+                shiftKey: e.shiftKey,
+                metaKey: e.metaKey
+            });
+        });
+
+        remoteScreen.addEventListener('mouseup', (e) => {
+            if (!remoteControlEnabled) return;
+            
+            const rect = remoteScreen.getBoundingClientRect();
+            const scaleX = remoteScreen.videoWidth / rect.width;
+            const scaleY = remoteScreen.videoHeight / rect.height;
+            
+            connection.send({
+                type: 'mouse',
+                event: 'mouseup',
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY,
+                button: e.button,
+                buttons: e.buttons,
+                ctrlKey: e.ctrlKey,
+                altKey: e.altKey,
+                shiftKey: e.shiftKey,
+                metaKey: e.metaKey
+            });
+        });
+
+        remoteScreen.addEventListener('mousemove', (e) => {
+            if (!remoteControlEnabled) return;
+            
+            const rect = remoteScreen.getBoundingClientRect();
+            const scaleX = remoteScreen.videoWidth / rect.width;
+            const scaleY = remoteScreen.videoHeight / rect.height;
+            
+            connection.send({
+                type: 'mouse',
+                event: 'mousemove',
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY,
+                button: e.button,
+                buttons: e.buttons,
+                ctrlKey: e.ctrlKey,
+                altKey: e.altKey,
+                shiftKey: e.shiftKey,
+                metaKey: e.metaKey
+            });
+        });
+
+        // 키보드 이벤트도 추가
+        document.addEventListener('keydown', (e) => {
+            if (!remoteControlEnabled) return;
+            if (!remoteScreen.style.display === 'block') return;
+            
+            connection.send({
+                type: 'keyboard',
+                event: 'keydown',
+                key: e.key,
+                keyCode: e.keyCode,
+                code: e.code,
+                ctrlKey: e.ctrlKey,
+                altKey: e.altKey,
+                shiftKey: e.shiftKey,
+                metaKey: e.metaKey
+            });
+            
+            // 브라우저 기본 동작 방지
+            e.preventDefault();
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (!remoteControlEnabled) return;
+            if (!remoteScreen.style.display === 'block') return;
+            
+            connection.send({
+                type: 'keyboard',
+                event: 'keyup',
+                key: e.key,
+                keyCode: e.keyCode,
+                code: e.code,
+                ctrlKey: e.ctrlKey,
+                altKey: e.altKey,
+                shiftKey: e.shiftKey,
+                metaKey: e.metaKey
+            });
+            
+            // 브라우저 기본 동작 방지
+            e.preventDefault();
+        });
+    }
 
     // 연결 초기화
     function resetConnection() {
-        if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
-            localStream = null;
+        if (connection) {
+            connection.close();
+            connection = null;
         }
         
         if (call) {
@@ -192,105 +239,145 @@ document.addEventListener('DOMContentLoaded', () => {
             call = null;
         }
         
-        connection = null;
-        remoteScreen.srcObject = null;
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+        
         remoteScreen.style.display = 'none';
-        startSharingButton.disabled = false;
-        stopSharingButton.disabled = true;
-        disconnectButton.disabled = true;
-        statusDiv.textContent = '연결 준비 완료. ID를 공유하세요.';
+        remoteScreen.srcObject = null;
+        startSharingBtn.disabled = false;
+        stopSharingBtn.disabled = true;
+        disconnectBtn.disabled = true;
+        enableControlBtn.disabled = true;
+        disableControlBtn.disabled = true;
+        remoteControlEnabled = false;
     }
 
-    // 원격 제어 처리
-    function handleRemoteControl(action) {
-        // 마우스 및 키보드 이벤트 처리
-        console.log('원격 제어 명령:', action);
-        
-        if (action.type === 'click') {
-            // 화면 크기에 맞게 좌표 변환
-            const screenWidth = window.screen.width;
-            const screenHeight = window.screen.height;
-            
-            const x = Math.floor(action.x * screenWidth);
-            const y = Math.floor(action.y * screenHeight);
-            
-            // 클릭 이벤트 시뮬레이션
-            simulateClick(x, y);
-        }
-    }
-
-    // 클릭 시뮬레이션 함수
-    function simulateClick(x, y) {
-        // 브라우저에서 직접 클릭을 시뮬레이션하는 것은 보안상 제한이 있습니다.
-        // 따라서 사용자에게 클릭 위치를 알려주는 시각적 표시를 제공합니다.
-        const clickIndicator = document.createElement('div');
-        clickIndicator.style.position = 'fixed';
-        clickIndicator.style.left = `${x}px`;
-        clickIndicator.style.top = `${y}px`;
-        clickIndicator.style.width = '20px';
-        clickIndicator.style.height = '20px';
-        clickIndicator.style.borderRadius = '50%';
-        clickIndicator.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
-        clickIndicator.style.zIndex = '9999';
-        clickIndicator.style.pointerEvents = 'none'; // 클릭 이벤트를 방해하지 않도록
-        
-        document.body.appendChild(clickIndicator);
-        
-        // 애니메이션 효과
-        clickIndicator.animate([
-            { opacity: 1, transform: 'scale(1)' },
-            { opacity: 0, transform: 'scale(2)' }
-        ], {
-            duration: 500,
-            easing: 'ease-out'
-        }).onfinish = () => {
-            document.body.removeChild(clickIndicator);
-        };
-        
-        // 실제 클릭 이벤트 발생 (참고: 브라우저 보안 정책으로 인해 제한적으로 작동)
-        try {
-            const clickEvent = new MouseEvent('click', {
-                view: window,
-                bubbles: true,
-                cancelable: true,
-                clientX: x,
-                clientY: y
-            });
-            
-            // 클릭 위치에 있는 요소 찾기
-            const element = document.elementFromPoint(x, y);
-            if (element) {
-                element.dispatchEvent(clickEvent);
-                statusDiv.textContent = `${element.tagName} 요소를 클릭했습니다.`;
-            }
-        } catch (err) {
-            console.error('클릭 시뮬레이션 오류:', err);
-        }
-    }
-
-    // 랜덤 ID 생성
-    function generateRandomId() {
-        return Math.random().toString(36).substr(2, 9);
-    }
-
-    // 원격 화면에 마우스 이벤트 리스너 추가
-    remoteScreen.addEventListener('click', (e) => {
-        if (!connection || !connection.open || isHost) return;
-        
-        const rect = remoteScreen.getBoundingClientRect();
-        const x = ((e.clientX - rect.left) / rect.width).toFixed(4);
-        const y = ((e.clientY - rect.top) / rect.height).toFixed(4);
-        
-        connection.send({
-            type: 'control',
-            action: {
-                type: 'click',
-                x: parseFloat(x),
-                y: parseFloat(y)
-            }
-        });
+    // 이벤트 리스너
+    copyIdBtn.addEventListener('click', () => {
+        connectionId.select();
+        document.execCommand('copy');
+        statusDisplay.textContent = 'ID가 클립보드에 복사되었습니다.';
     });
 
-    // 초기화 실행
+    connectBtn.addEventListener('click', () => {
+        const targetId = remoteId.value.trim();
+        if (!targetId) {
+            statusDisplay.textContent = '연결할 상대방 ID를 입력하세요.';
+            return;
+        }
+
+        connection = peer.connect(targetId);
+        setupConnectionHandlers();
+        statusDisplay.textContent = '연결 중...';
+    });
+
+    startSharingBtn.addEventListener('click', async () => {
+        try {
+            // 전체 화면 공유 (바탕화면 포함)
+            stream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    cursor: 'always',
+                    displaySurface: 'monitor' // 모니터 전체 화면 공유
+                },
+                audio: false
+            });
+            
+            if (connection) {
+                call = peer.call(connection.peer, stream);
+                statusDisplay.textContent = '화면 공유 중...';
+            } else {
+                statusDisplay.textContent = '화면 공유를 시작했지만, 연결된 상대방이 없습니다.';
+            }
+            
+            startSharingBtn.disabled = true;
+            stopSharingBtn.disabled = false;
+            
+            // 원격 제어 버튼 활성화
+            if (connectionMode.value === 'client') {
+                enableControlBtn.disabled = false;
+            }
+            
+            // 스트림 종료 감지
+            stream.getVideoTracks()[0].addEventListener('ended', () => {
+                stopSharingBtn.click();
+            });
+        } catch (err) {
+            console.error('화면 공유 오류:', err);
+            statusDisplay.textContent = `화면 공유 오류: ${err.message}`;
+        }
+    });
+
+    stopSharingBtn.addEventListener('click', () => {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+        
+        if (call) {
+            call.close();
+            call = null;
+        }
+        
+        startSharingBtn.disabled = false;
+        stopSharingBtn.disabled = true;
+        enableControlBtn.disabled = true;
+        disableControlBtn.disabled = true;
+        remoteControlEnabled = false;
+        statusDisplay.textContent = '화면 공유가 중지되었습니다.';
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+        resetConnection();
+        statusDisplay.textContent = '연결이 종료되었습니다.';
+    });
+
+    enableControlBtn.addEventListener('click', () => {
+        remoteControlEnabled = true;
+        enableControlBtn.disabled = true;
+        disableControlBtn.disabled = false;
+        enableControlBtn.classList.add('disabled');
+        disableControlBtn.classList.remove('disabled');
+        
+        if (connection) {
+            connection.send({
+                type: 'control',
+                action: 'enable'
+            });
+        }
+        
+        statusDisplay.textContent = '원격 제어가 활성화되었습니다.';
+    });
+
+    disableControlBtn.addEventListener('click', () => {
+        remoteControlEnabled = false;
+        enableControlBtn.disabled = false;
+        disableControlBtn.disabled = true;
+        enableControlBtn.classList.remove('disabled');
+        disableControlBtn.classList.add('disabled');
+        
+        if (connection) {
+            connection.send({
+                type: 'control',
+                action: 'disable'
+            });
+        }
+        
+        statusDisplay.textContent = '원격 제어가 비활성화되었습니다.';
+    });
+
+    // 모드 변경 시 UI 업데이트
+    connectionMode.addEventListener('change', () => {
+        resetConnection();
+        if (connectionMode.value === 'host') {
+            statusDisplay.textContent = '호스트 모드: 화면을 공유하고 원격 제어를 허용합니다.';
+        } else {
+            statusDisplay.textContent = '클라이언트 모드: 상대방의 화면을 보고 원격 제어합니다.';
+        }
+    });
+
+    // 초기화 및 원격 제어 설정
     initialize();
+    setupRemoteControl();
 }); 
