@@ -2,127 +2,367 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>원격 제어 프로그램</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>원격 제어 클라이언트</title>
     <style>
         body {
-            font-family: 'Noto Sans KR', sans-serif;
             margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
+            padding: 0;
+            overflow: hidden;
+            touch-action: none;
+            font-family: Arial, sans-serif;
         }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        
+        #screen {
+            width: 100%;
+            height: 100vh;
+            object-fit: contain;
+            display: block;
         }
-        h1 {
-            color: #333;
-            text-align: center;
-        }
-        .control-panel {
+        
+        #controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
             display: flex;
-            flex-direction: column;
-            gap: 15px;
-            margin-top: 20px;
+            justify-content: space-around;
         }
-        .connection-info {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
+        
         button {
-            padding: 10px 15px;
-            background-color: #4285f4;
+            padding: 10px;
+            margin: 5px;
+            background-color: #4CAF50;
             color: white;
             border: none;
             border-radius: 5px;
-            cursor: pointer;
             font-size: 16px;
         }
-        button:hover {
-            background-color: #3367d6;
-        }
-        input, select {
+        
+        #keyboard {
+            position: fixed;
+            bottom: 60px;
+            left: 0;
+            right: 0;
+            background-color: rgba(0, 0, 0, 0.8);
             padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            display: none;
+        }
+        
+        #keyboard input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
             font-size: 16px;
         }
-        #remoteScreen {
-            width: 100%;
-            height: 400px;
-            background-color: #eee;
-            margin-top: 20px;
-            border: 1px solid #ddd;
-            display: none;
-            position: relative;
-            cursor: default;
-        }
-        .status {
-            text-align: center;
-            margin-top: 10px;
-            font-weight: bold;
-        }
-        .remote-controls {
-            margin-top: 15px;
+        
+        .key-row {
             display: flex;
-            gap: 10px;
+            justify-content: center;
+            margin-bottom: 5px;
         }
-        .control-toggle {
-            background-color: #34a853;
+        
+        .key {
+            width: 40px;
+            height: 40px;
+            margin: 2px;
+            background-color: #333;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 5px;
+            user-select: none;
         }
-        .control-toggle.disabled {
-            background-color: #999;
+        
+        .key.wide {
+            width: 80px;
+        }
+        
+        #connection-form {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        
+        #connection-form input {
+            width: 80%;
+            padding: 15px;
+            margin: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+        }
+        
+        #connection-form button {
+            width: 80%;
+            padding: 15px;
+            margin: 10px;
+            font-size: 18px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>원격 제어 프로그램</h1>
-        
-        <div class="control-panel">
-            <div class="connection-info">
-                <div>
-                    <label for="connectionMode">연결 모드:</label>
-                    <select id="connectionMode">
-                        <option value="host">호스트 (제어 허용)</option>
-                        <option value="client">클라이언트 (원격 제어)</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="connectionId">연결 ID:</label>
-                    <input type="text" id="connectionId" readonly>
-                    <button id="copyId">복사</button>
-                </div>
-            </div>
-            
-            <div>
-                <label for="remoteId">원격 ID:</label>
-                <input type="text" id="remoteId" placeholder="연결할 상대방 ID 입력">
-                <button id="connect">연결</button>
-            </div>
-            
-            <button id="startSharing">화면 공유 시작</button>
-            <button id="stopSharing" disabled>화면 공유 중지</button>
-            <button id="disconnect" disabled>연결 종료</button>
-            
-            <div class="remote-controls">
-                <button id="enableControl" class="control-toggle">원격 제어 활성화</button>
-                <button id="disableControl" class="control-toggle disabled" disabled>원격 제어 비활성화</button>
-            </div>
-            
-            <div class="status" id="status">연결 대기 중...</div>
+    <div id="connection-form">
+        <h2 style="color: white;">원격 제어 연결</h2>
+        <input type="text" id="server-address" placeholder="서버 주소 입력 (예: 192.168.1.100:8765)">
+        <button id="connect-button">연결</button>
+    </div>
+    
+    <img id="screen" alt="원격 화면">
+    
+    <div id="controls">
+        <button id="keyboard-toggle">키보드</button>
+        <button id="left-click">좌클릭</button>
+        <button id="right-click">우클릭</button>
+        <button id="refresh">새로고침</button>
+    </div>
+    
+    <div id="keyboard">
+        <input type="text" id="text-input" placeholder="텍스트 입력">
+        <div class="key-row">
+            <div class="key">1</div>
+            <div class="key">2</div>
+            <div class="key">3</div>
+            <div class="key">4</div>
+            <div class="key">5</div>
+            <div class="key">6</div>
+            <div class="key">7</div>
+            <div class="key">8</div>
+            <div class="key">9</div>
+            <div class="key">0</div>
         </div>
-        
-        <video id="remoteScreen" autoplay playsinline></video>
+        <div class="key-row">
+            <div class="key">q</div>
+            <div class="key">w</div>
+            <div class="key">e</div>
+            <div class="key">r</div>
+            <div class="key">t</div>
+            <div class="key">y</div>
+            <div class="key">u</div>
+            <div class="key">i</div>
+            <div class="key">o</div>
+            <div class="key">p</div>
+        </div>
+        <div class="key-row">
+            <div class="key">a</div>
+            <div class="key">s</div>
+            <div class="key">d</div>
+            <div class="key">f</div>
+            <div class="key">g</div>
+            <div class="key">h</div>
+            <div class="key">j</div>
+            <div class="key">k</div>
+            <div class="key">l</div>
+        </div>
+        <div class="key-row">
+            <div class="key">z</div>
+            <div class="key">x</div>
+            <div class="key">c</div>
+            <div class="key">v</div>
+            <div class="key">b</div>
+            <div class="key">n</div>
+            <div class="key">m</div>
+            <div class="key wide">⌫</div>
+        </div>
+        <div class="key-row">
+            <div class="key wide">Shift</div>
+            <div class="key wide">Space</div>
+            <div class="key wide">Enter</div>
+            <div class="key wide">Tab</div>
+        </div>
+        <div class="key-row">
+            <div class="key">←</div>
+            <div class="key">↑</div>
+            <div class="key">↓</div>
+            <div class="key">→</div>
+            <div class="key wide">Esc</div>
+        </div>
     </div>
 
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
-    <script src="app.js"></script>
+    <script>
+        let socket;
+        let clickMode = "move";
+        let isKeyboardVisible = false;
+        
+        // 연결 폼 처리
+        document.getElementById('connect-button').addEventListener('click', () => {
+            const serverAddress = document.getElementById('server-address').value;
+            if (serverAddress) {
+                connectToServer(serverAddress);
+            } else {
+                alert('서버 주소를 입력해주세요.');
+            }
+        });
+        
+        // 서버 연결 함수
+        function connectToServer(address) {
+            try {
+                socket = new WebSocket(`ws://${address}`);
+                
+                socket.onopen = () => {
+                    console.log('서버에 연결되었습니다.');
+                    document.getElementById('connection-form').style.display = 'none';
+                    requestScreen();
+                };
+                
+                socket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'screen') {
+                        document.getElementById('screen').src = 'data:image/jpeg;base64,' + data.data;
+                        setTimeout(requestScreen, 100); // 100ms 후 다음 화면 요청
+                    }
+                };
+                
+                socket.onclose = () => {
+                    console.log('서버와의 연결이 종료되었습니다.');
+                    document.getElementById('connection-form').style.display = 'flex';
+                    alert('서버와의 연결이 종료되었습니다.');
+                };
+                
+                socket.onerror = (error) => {
+                    console.error('WebSocket 오류:', error);
+                    alert('연결 오류가 발생했습니다.');
+                };
+            } catch (error) {
+                console.error('연결 오류:', error);
+                alert('연결 오류가 발생했습니다.');
+            }
+        }
+        
+        // 화면 요청 함수
+        function requestScreen() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: 'request_screen' }));
+            }
+        }
+        
+        // 화면 터치 이벤트 처리
+        const screen = document.getElementById('screen');
+        
+        screen.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = screen.getBoundingClientRect();
+            
+            // 상대적 위치 계산 (0~1 사이의 값)
+            const x = (touch.clientX - rect.left) / rect.width;
+            const y = (touch.clientY - rect.top) / rect.height;
+            
+            if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
+                if (clickMode === 'left_click') {
+                    sendMouseEvent(x, y, 'click');
+                    clickMode = 'move'; // 클릭 후 이동 모드로 돌아감
+                } else if (clickMode === 'right_click') {
+                    sendMouseEvent(x, y, 'right_click');
+                    clickMode = 'move'; // 클릭 후 이동 모드로 돌아감
+                } else {
+                    sendMouseEvent(x, y, 'move');
+                }
+            }
+        });
+        
+        screen.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = screen.getBoundingClientRect();
+            
+            const x = (touch.clientX - rect.left) / rect.width;
+            const y = (touch.clientY - rect.top) / rect.height;
+            
+            if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
+                sendMouseEvent(x, y, 'move');
+            }
+        });
+        
+        // 마우스 이벤트 전송
+        function sendMouseEvent(x, y, action) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'mouse',
+                    x: x,
+                    y: y,
+                    action: action
+                }));
+            }
+        }
+        
+        // 키보드 이벤트 전송
+        function sendKeyEvent(key) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'keyboard',
+                    key: key
+                }));
+            }
+        }
+        
+        // 버튼 이벤트 처리
+        document.getElementById('left-click').addEventListener('click', () => {
+            clickMode = 'left_click';
+        });
+        
+        document.getElementById('right-click').addEventListener('click', () => {
+            clickMode = 'right_click';
+        });
+        
+        document.getElementById('refresh').addEventListener('click', () => {
+            requestScreen();
+        });
+        
+        // 키보드 토글
+        document.getElementById('keyboard-toggle').addEventListener('click', () => {
+            isKeyboardVisible = !isKeyboardVisible;
+            document.getElementById('keyboard').style.display = isKeyboardVisible ? 'block' : 'none';
+        });
+        
+        // 가상 키보드 처리
+        const keys = document.querySelectorAll('.key');
+        keys.forEach(key => {
+            key.addEventListener('click', () => {
+                let keyValue = key.textContent;
+                
+                // 특수 키 처리
+                if (keyValue === '⌫') keyValue = 'backspace';
+                else if (keyValue === 'Space') keyValue = 'space';
+                else if (keyValue === 'Enter') keyValue = 'enter';
+                else if (keyValue === 'Tab') keyValue = 'tab';
+                else if (keyValue === 'Shift') keyValue = 'shift';
+                else if (keyValue === '←') keyValue = 'left';
+                else if (keyValue === '→') keyValue = 'right';
+                else if (keyValue === '↑') keyValue = 'up';
+                else if (keyValue === '↓') keyValue = 'down';
+                else if (keyValue === 'Esc') keyValue = 'escape';
+                
+                sendKeyEvent(keyValue);
+            });
+        });
+        
+        // 텍스트 입력 처리
+        const textInput = document.getElementById('text-input');
+        textInput.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') {
+                // 입력된 텍스트를 한 글자씩 전송
+                const text = textInput.value;
+                for (let i = 0; i < text.length; i++) {
+                    sendKeyEvent(text[i]);
+                }
+                sendKeyEvent('enter');
+                textInput.value = '';
+            }
+        });
+    </script>
 </body>
-</html>
+</html> 
