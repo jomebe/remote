@@ -209,7 +209,9 @@
         // 서버 연결 함수
         function connectToServer(address) {
             try {
-                socket = new WebSocket(`ws://${address}`);
+                // 현재 페이지가 HTTPS인지 확인
+                const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+                socket = new WebSocket(`${protocol}${address}`);
                 
                 socket.onopen = () => {
                     console.log('서버에 연결되었습니다.');
@@ -234,11 +236,11 @@
                 
                 socket.onerror = (error) => {
                     console.error('WebSocket 오류:', error);
-                    alert('연결 오류가 발생했습니다.');
+                    alert('연결 오류가 발생했습니다. HTTPS에서 접속 시 서버도 SSL이 필요합니다.');
                 };
             } catch (error) {
                 console.error('연결 오류:', error);
-                alert('연결 오류가 발생했습니다.');
+                alert('연결 오류가 발생했습니다. HTTPS에서 접속 시 서버도 SSL이 필요합니다.');
             }
         }
         

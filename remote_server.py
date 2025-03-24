@@ -7,6 +7,7 @@ import io
 from PIL import ImageGrab
 import sys
 import os
+import ssl
 
 # 화면 캡처 및 인코딩 함수
 async def capture_screen():
@@ -68,14 +69,28 @@ async def main():
     host = "0.0.0.0"  # 모든 네트워크 인터페이스에서 수신
     port = 8765
     
-    server = await websockets.serve(handle_client, host, port)
-    print(f"서버가 시작되었습니다. http://{host}:{port}")
+    # SSL 컨텍스트 생성
+    ssl_context = None
+    cert_file = "cert.pem"
+    key_file = "key.pem"
+    
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_context.load_cert_chain(cert_file, key_file)
+        print("SSL 인증서를 로드했습니다. WSS 연결이 가능합니다.")
+    else:
+        print("SSL 인증서가 없습니다. WS 연결만 가능합니다.")
+        print("HTTPS 페이지에서 접속하려면 SSL 인증서가 필요합니다.")
+    
+    server = await websockets.serve(handle_client, host, port, ssl=ssl_context)
+    protocol = "https" if ssl_context else "http"
+    print(f"서버가 시작되었습니다. {protocol}://{host}:{port}")
     
     # 로컬 IP 주소 출력
     import socket
     hostname = socket.gethostname()
     local_ip = socket.gethostbyname(hostname)
-    print(f"로컬 IP 주소: http://{local_ip}:{port}")
+    print(f"로컬 IP 주소: {protocol}://{local_ip}:{port}")
     
     await server.wait_closed()
 
